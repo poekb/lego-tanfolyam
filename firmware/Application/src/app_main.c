@@ -48,41 +48,27 @@ int app_one()
 	return 0;
 }
 
-void turnDeg(int deg) {
+
+float Kp = 1;
+float Ki = 0.0;
+float Kd = 0.01;
+float ko = 10;
+float speed = 15;
+float norm = 15;
 
 
-}
+float SAMPLE_DELAY_MS = 33;
 
-float Kp = 0.3;
-float Ki = 0.1;
-float Kd = 0.0;
-float ko = 1;
-float eps = 10;
 int app_main()
 {
-	uint16_t target = 400;
+	uint16_t target = 30;
 	float integral = 0;
 	char buff[10];
 	float val = 0;
 	float lastError = 0;
 	char type;
-	int timer = 0;
-	int look = 0;
-	int dir = 1;
 	while (1) {
-		timer += 1;
-		if (timer == 15){
-			look += 30 * dir;
 
-		}else if(timer == 30){
-			dir *= -1;
-			look += 30 * dir;
-			timer = 0;
-		}
-
-		setServoPosition(look);
-
-		/*
 		if (espRead(buff)) {
 			sscanf(buff, "%c%f", &type, &val);
 			switch (type) {
@@ -99,68 +85,44 @@ int app_main()
 				ko = val;
 				break;
 			case 'e':
-				eps = val;
+				speed = val;
+				break;
+			case 'n':
+				norm = val;
 			}
 		}
-	*/
-		uint16_t input = getIrDistance();
+		Color color;
+		getColorHsv(&color);
+
+		espPrintf("Value: %d", color.v);
+		espPrintf("Hue: %d", color.h);
+		espPrintf("Sat: %d", color.s);
+
+
+
+		uint16_t input = color.v;
 		//espPrintf("D: %d", input);
 
 		float error = input - target;
-		integral = fmax(fmin(integral + error * 0.016, 1), -1);
-		float deriv = (error - lastError) * 30;
+		integral = fmax(fmin(integral + error * 1 / SAMPLE_DELAY_MS, 1), -1);
+		float deriv = (error - lastError) * SAMPLE_DELAY_MS;
 		lastError = error;
-		float output = 30; //error * Kp + integral * Ki + deriv * Kd;
+		float output = error * Kp + integral * Ki + deriv * Kd;
 
+		//float forward = speed * expf(-fabs(error) * norm);
+		float forward = ko + speed * (1 - (error * error) / (norm * norm));
 
+		if (color.s > 30 && color.h < 200 && color.h > 100) {
+			setMotorSpeed(MOT_L, speed);
+			setMotorSpeed(MOT_R, speed);
 
-		setMotorSpeed(MOT_L, fmax(fmin(ko * output, SPEED), -SPEED));
-		setMotorSpeed(MOT_R, fmax(fmin(ko * output, SPEED), -SPEED));
-
-		if ((error) < 0) {
-			setMotorSpeed(MOT_L, 0);
-			setMotorSpeed(MOT_R, 0);
-			setServoPosition(-90);
-			delayMs(1000);
-			uint16_t left = getIrDistance();
-			setServoPosition(90);
-			delayMs(1000);
-			if (left > getIrDistance()) {
-				setMotorSpeed(MOT_L, SPEED / 4);
-				setMotorSpeed(MOT_R, -SPEED / 4);
-
-				float angle = 0;
-				while (angle > -85)
-				{
-					Vec3 gyro;
-					getGyroData(&gyro);
-					angle += gyro.z * 0.01;
-					delayUs(10000);
-				}
-				setMotorSpeed(MOT_L, 0);
-				setMotorSpeed(MOT_R, 0);
-			}
-			else {
-				setMotorSpeed(MOT_L, -SPEED / 4);
-				setMotorSpeed(MOT_R, SPEED / 4);
-
-				float angle = 0;
-				while (angle < 85)
-				{
-					Vec3 gyro;
-					getGyroData(&gyro);
-					angle += gyro.z * 0.01;
-					delayUs(10000);
-				}
-				setMotorSpeed(MOT_L, 0);
-				setMotorSpeed(MOT_R, 0);
-			}
-			setServoPosition(0);
-			delayMs(1000);
+		}
+		else {
+			setMotorSpeed(MOT_L, fmax(fmin(-output + forward, SPEED), -SPEED));
+			setMotorSpeed(MOT_R, fmax(fmin(output + forward, SPEED), -SPEED));
 		}
 
-
-		delayMs(33);
+		delayMs(SAMPLE_DELAY_MS);
 	}
 
 }
