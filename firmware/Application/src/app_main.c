@@ -67,6 +67,9 @@ int app_main()
 	float val = 0;
 	float lastError = 0;
 	char type;
+
+	int prevGreen = 0;
+
 	while (1) {
 
 		if (espRead(buff)) {
@@ -113,13 +116,34 @@ int app_main()
 		float forward = ko + speed * (1 - (error * error) / (norm * norm));
 
 		if (color.s > 30 && color.h < 200 && color.h > 100) {
+			if (!prevGreen) {
+				setMotorSpeed(MOT_L, 0);
+				setMotorSpeed(MOT_R, 0);
+
+				while (1) {
+					int seen = 0;
+					for (int i = -90; i <= 90; i += 5) {
+						setServoPosition(i);
+						delayMs(100);
+						uint16_t d = getIrDistance();
+						if (d < 400)
+							seen = 1;
+					}
+
+					if (seen == 0)
+						break;
+				}
+			}
+
 			setMotorSpeed(MOT_L, speed);
 			setMotorSpeed(MOT_R, speed);
+			prevGreen = 1;
 
 		}
 		else {
 			setMotorSpeed(MOT_L, fmax(fmin(-output + forward, SPEED), -SPEED));
 			setMotorSpeed(MOT_R, fmax(fmin(output + forward, SPEED), -SPEED));
+			prevGreen = 0;
 		}
 
 		delayMs(SAMPLE_DELAY_MS);
