@@ -10,143 +10,51 @@ const char* WIFI_SSID = "LegoTanfolyam";
 const char* WIFI_PASSWORD = "almaalma";
 
 const char* SERVER_IP = "192.168.1.69";
+
 #define SPEED 35
-int app_one()
-{
 
-	char data[50];
-	while (!espRead(data));
-	int x;
-	sscanf(data, "start %d", &x);
-
-	for (int i = 1; i < x * 4 + 1; i++) {
+int app_main() {
+	while (1) {
 		setMotorSpeed(MOT_L, SPEED);
 		setMotorSpeed(MOT_R, SPEED);
 
-		delayMs(2000);
+		if (getIrDistance() < 280) {
 
-		setMotorSpeed(MOT_L, SPEED / 4);
-		setMotorSpeed(MOT_R, -SPEED / 4);
+			setMotorSpeed(MOT_L, 0);
+			setMotorSpeed(MOT_R, 0);
 
-		float angle = 0;
-		while (angle > -85)
-		{
-			Vec3 gyro;
-			getGyroData(&gyro);
-			angle += gyro.z * 0.01;
-			delayUs(10000);
-		}
-		setMotorSpeed(MOT_L, 0);
-		setMotorSpeed(MOT_R, 0);
-
-		lcdPrintf(0, 0, "Kr: %d", i / 4);
-		lcdPrintf(1, 0, "Fd: %d", i);
-		espPrintf("Fd: %d Kr: %d", i, i / 4);
-	}
-	setMotorSpeed(MOT_L, 0);
-	setMotorSpeed(MOT_R, 0);
-	return 0;
-}
-
-
-float Kp = 1;
-float Ki = 0.0;
-float Kd = 0.01;
-float ko = 10;
-float speed = 15;
-float norm = 15;
-
-
-float SAMPLE_DELAY_MS = 33;
-
-int app_main()
-{
-	uint16_t target = 30;
-	float integral = 0;
-	char buff[10];
-	float val = 0;
-	float lastError = 0;
-	char type;
-
-	int prevGreen = 0;
-
-	while (1) {
-
-		if (espRead(buff)) {
-			sscanf(buff, "%c%f", &type, &val);
-			switch (type) {
-			case 'p':
-				Kp = val;
-				break;
-			case 'i':
-				Ki = val;
-				break;
-			case 'd':
-				Kd = val;
-				break;
-			case 'o':
-				ko = val;
-				break;
-			case 'e':
-				speed = val;
-				break;
-			case 'n':
-				norm = val;
+			setServoPosition(-90);
+			delayMs(1000);
+			int left = getIrDistance();
+			setServoPosition(90);
+			delayMs(1000);
+			float rot = 0;
+			float target = 90;
+			if (getIrDistance() < left) {
+				setMotorSpeed(MOT_L, 5);
+				setMotorSpeed(MOT_R, -5);
 			}
-		}
-		Color color;
-		getColorHsv(&color);
-
-		espPrintf("Value: %d", color.v);
-		espPrintf("Hue: %d", color.h);
-		espPrintf("Sat: %d", color.s);
-
-
-
-		uint16_t input = color.v;
-		//espPrintf("D: %d", input);
-
-		float error = input - target;
-		integral = fmax(fmin(integral + error * 1 / SAMPLE_DELAY_MS, 1), -1);
-		float deriv = (error - lastError) * SAMPLE_DELAY_MS;
-		lastError = error;
-		float output = error * Kp + integral * Ki + deriv * Kd;
-
-		//float forward = speed * expf(-fabs(error) * norm);
-		float forward = ko + speed * (1 - (error * error) / (norm * norm));
-
-		if (color.s > 30 && color.h < 200 && color.h > 100) {
-			if (!prevGreen) {
-				setMotorSpeed(MOT_L, 0);
-				setMotorSpeed(MOT_R, 0);
-
-				while (1) {
-					int seen = 0;
-					for (int i = -90; i <= 90; i += 5) {
-						setServoPosition(i);
-						delayMs(100);
-						uint16_t d = getIrDistance();
-						if (d < 400)
-							seen = 1;
-					}
-
-					if (seen == 0)
-						break;
-				}
+			else {
+				setMotorSpeed(MOT_L, -5);
+				setMotorSpeed(MOT_R, 5);
+			}
+			setServoPosition(0);
+			while (fabs(rot) < target) {
+				delayUs(10000);
+				Vec3 gyro;
+				getGyroData(&gyro);
+				rot += gyro.z * 0.01;
+				lcdPrintf(0, 0, "%g", rot);
+				espPrintf("%g", rot);
 			}
 
-			setMotorSpeed(MOT_L, speed);
-			setMotorSpeed(MOT_R, speed);
-			prevGreen = 1;
-
-		}
-		else {
-			setMotorSpeed(MOT_L, fmax(fmin(-output + forward, SPEED), -SPEED));
-			setMotorSpeed(MOT_R, fmax(fmin(output + forward, SPEED), -SPEED));
-			prevGreen = 0;
+			setMotorSpeed(MOT_L, SPEED);
+			setMotorSpeed(MOT_R, SPEED);
 		}
 
-		delayMs(SAMPLE_DELAY_MS);
+		delayMs(10);
 	}
+
+
 
 }
